@@ -1,4 +1,4 @@
 CC=gcc
-CFLAGS=-O -Wall
+CFLAGS=-O -Wall -Wextra -pedantic -Werror -Wno-format
 
 all: si5351-experiments
