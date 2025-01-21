@@ -45,12 +45,17 @@ int main(int argc, char **argv) {
     }
 
     /* bring xtal (CLKIN) within the 10-40MHz range using CLKIN_DIV */
-    uint8_t clkin_div = ((xtal - 1) / 40e6) + 1;
-    if (clkin_div > 1) {
+    double xtal_orig = xtal;
+    uint8_t clkin_div = 0;
+    while (xtal > 40e6 && clkin_div <= 3) {
+        xtal /= 2.0;
+        clkin_div += 1;
+    }
+    if (clkin_div > 0) {
         fprintf(stdout, "--> CLKIN_DIV=%d\n", clkin_div);
         fprintf(stdout, "\n");
-        xtal /= clkin_div;
     }
+    int xtal_div = 1 << clkin_div;
 
     /* if the requested clock is below 1MHz, use an R divider */
     double r_clk0 = clks[0];
@@ -86,7 +91,7 @@ int main(int argc, char **argv) {
         double feedback_ms = f_vco / xtal;
 
         if (feedback_ms < 15 || feedback_ms > 90) {
-            fprintf(stderr, "invalid feedback MS: %'.0lf (xtal=%'.0lf/%d, output MS=%d, f_VCO=%'.0lf)\n", feedback_ms, xtal * clkin_div, clkin_div, output_ms, f_vco);
+            fprintf(stderr, "invalid feedback MS: %'.0lf (xtal=%'.0lf/%d, output MS=%d, f_VCO=%'.0lf)\n", feedback_ms, xtal_orig, xtal_div, output_ms, f_vco);
             fprintf(stderr, "\n");
             output_ms -= 2;
             continue;
@@ -104,7 +109,7 @@ int main(int argc, char **argv) {
         } 
         double actual_ratio = a + (double)b / (double)c;
         double actual_pll_freq = xtal * actual_ratio;
-        fprintf(stdout, "actual PLL frequency: %'.0lf/%d * (%d + %d / %d) = %'.0lf%s\n", xtal * clkin_div, clkin_div, a, b, c, actual_pll_freq, is_integer);
+        fprintf(stdout, "actual PLL frequency: %'.0lf/%d * (%d + %d / %d) = %'.0lf%s\n", xtal_orig, xtal_div, a, b, c, actual_pll_freq, is_integer);
 
         double actual_clk0 = actual_pll_freq / output_ms / (1 << rdiv);
         fprintf(stdout, "actual clock 0: %'.0lf / %d = %'.0lf\n", actual_pll_freq, output_ms * (1 << rdiv), actual_clk0);
@@ -153,13 +158,13 @@ int main(int argc, char **argv) {
     uint32_t feedback_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / xtal));
     feedback_ms -= feedback_ms % 2;
     if (feedback_ms < 16) {
-        fprintf(stderr, "invalid feedback MS: %d (xtal=%'.0lf/%d, output MS=%d, f_VCO=%'.0lf)\n", feedback_ms, xtal * clkin_div, clkin_div, output_ms, feedback_ms * xtal);
+        fprintf(stderr, "invalid feedback MS: %d (xtal=%'.0lf/%d, output MS=%d, f_VCO=%'.0lf)\n", feedback_ms, xtal_orig, xtal_div, clkin_div, output_ms, feedback_ms * xtal);
         return EXIT_FAILURE;
     }
     if (feedback_ms > 90) {
         feedback_ms = 90;
         if (xtal * feedback_ms < SI5351_MIN_VCO_FREQ) {
-            fprintf(stderr, "invalid feedback MS: %d (xtal=%'.0lf/%d)\n", feedback_ms, xtal * clkin_div, clkin_div);
+            fprintf(stderr, "invalid feedback MS: %d (xtal=%'.0lf/%d)\n", feedback_ms, xtal_orig, xtal_div);
             return EXIT_FAILURE;
         }
     }
@@ -178,7 +183,7 @@ int main(int argc, char **argv) {
         uint32_t c;
         rational_approximation(output_ms, SI5351_MAX_DENOMINATOR, &a, &b, &c);
 
-        fprintf(stdout, "actual PLL frequency: %'.0lf/%d * %d\n", xtal * clkin_div, clkin_div, feedback_ms);
+        fprintf(stdout, "actual PLL frequency: %'.0lf/%d * %d\n", xtal_orig, xtal_div, feedback_ms);
 
         double actual_pll_freq = xtal * feedback_ms;
         fprintf(stdout, "actual PLL frequency: %'.0lf\n", actual_pll_freq);
